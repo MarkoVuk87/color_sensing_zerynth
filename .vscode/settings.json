@@ -1,0 +1,16 @@
+{
+    "python.terminal.activateEnvironment": false,
+    "python.pythonPath": "/home/marko/.zerynth3/dist/sys/python/bin/python3",
+    "python.linting.pylintPath": "/home/marko/.zerynth3/dist/sys/python/bin/python3",
+    "python.autoComplete.extraPaths": [
+        "/home/marko/.zerynth3/dist/libs",
+        "/home/marko/.zerynth3/dist/libs/stdlib"
+    ],
+    "python.linting.pylintArgs": [
+        "-m",
+        "pylint",
+        "--rcfile=/home/marko/.zerynth3/dist/toolchain/linter/zlintrc"
+    ],
+    "python.languageServer": "Jedi",
+    "python.linting.pylintEnabled": true
+}
