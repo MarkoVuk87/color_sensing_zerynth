@@ -12,5 +12,9 @@
         "--rcfile=/home/marko/.zerynth3/dist/toolchain/linter/zlintrc"
     ],
     "python.languageServer": "Jedi",
-    "python.linting.pylintEnabled": true
+    "python.linting.pylintEnabled": true,
+    "files.associations": {
+        "zerynth.h": "c",
+        "pyc_ifc.h": "c"
+    }
 }

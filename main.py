@@ -4,6 +4,8 @@
 
 import gpio
 import timers
+import color_sensing
+import serial
 
 counter = 0
 
@@ -18,8 +20,9 @@ S2 = D26
 S3 = D25
 OUT = D35
 LED = D15
+OE = D16
 
-color = (0, 0, 0)
+# color = (0, 0, 0)
 curr_color = COL_CLEAR
 
 def print_color(color):
@@ -68,26 +71,31 @@ def switch_col():
     counter = 0
 
 sleep(3000)
-print("Init")
 
+try:
+    print("Init")
+    colorSensor = color_sensing.ColorSensor(S0, S1, S2, S3, OUT, LED, OE, D17, 100)
+except Exception as e:
+    print(e)
 
-gpio.mode(LED, OUTPUT)  # Set mode for D10
+sleep(1000)
+print("Start recording color")
 
-gpio.mode(S0, OUTPUT)   # Set mode for S0
-gpio.mode(S1, OUTPUT)   # Set mode for S1
-gpio.low(S0)
-gpio.high(S1)
+# x, y, z = colorSensor.calibrate(10)
+x,y,z = 0,0,0    
+# print("Color calibrated:", x, y, z)                
 
-gpio.mode(S2, OUTPUT)   # Set mode for S2
-gpio.mode(S3, OUTPUT)   # Set mode for S3
-gpio.high(LED) 
-
-prepare_clear()
-gpio.on_rise(OUT, color_in)
-
-print("Start loop")
-timer_col = timers.Timer()
-timer_col.interval(1000, switch_col)
-# loop forever
 while True:
-    sleep(1000)
+    try:
+        color = colorSensor.get_color()
+        print("color: RGB(L)", color[0] - x, color[1] - y, color[2] - z, color[3])
+        
+        # for i in range(3):
+        #     color = colorSensor.get_color_segment(i)
+        #     print("seg: RGB", color[0] - x, color[1] - y, color[2] - z)
+        #     sleep(1000)            
+        # # sleep(1000)
+    except Exception as e:
+        print(e)
+        break
+print("END")
