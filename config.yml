@@ -3,7 +3,7 @@
 config:
   A_ZERYNTH_PY_AND_C_MACRO: 0
   # Uncomment the following line to enable debug. Allowed valus are: info, warning, error, debug
-  ZERYNTH_DEBUG: debug
+  # ZERYNTH_DEBUG: debug
   # Uncomment the following line to enable the Watchdog
   # ZERYNTH_EARLY_WATCHDOG: 5000
 ## PY SECTION: entries are visibile in Python preprocessor only

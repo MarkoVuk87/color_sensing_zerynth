@@ -1,10 +1,9 @@
 #include "zerynth.h"
 #include "zerynth_debug.h"
 
-static VSysTimer colorSensing_timer;
+// static VSysTimer colorSensing_timer;
 static uint32_t colorSensing_counter = 0;
 static uint8_t  colorSensing_counting = 1;
-
 typedef enum {
     COLOR_RED   = 0,
     COLOR_GREEN = 1,
@@ -18,6 +17,7 @@ typedef enum {
     SCALE_20   = 1,
     SCALE_100  = 2,
     POWER_DOWN = 3,
+    FREQ_LIMIT = 4,
 } colorSensing_freqScaling_t;
 
 typedef struct 
@@ -37,12 +37,20 @@ typedef struct
     int oe;
 } colorSensing_pins_t;
 
+typedef struct
+{
+    uint8_t  freqScale;
+    uint32_t timerPeriod;
+    uint8_t  ledOn;
+} colorSensing_options_t;
+
 static colorSensing_controlPin_t colorSensing_controlPin;
 static colorSensing_pins_t  colorSensing_pins;
 static colorSensing_colors_t colorSensing_color_element = COLOR_CLEAR;
 static vhal_pcnt_unit_t colorSensing_unit = 0;
-static uint32_t colorSensing_timerPeriod  = 0;
 static uint32_t colorSensing_color[4] = {0, 0, 0, 0};
+static colorSensing_options_t colorSensing_options;
+
 
 static inline void ColorSensing_StartCount()
 {
@@ -113,7 +121,6 @@ void ColorSensing_PrepareColor(uint32_t color)
 uint32_t ColorSensing_GetColorSegment(uint32_t colorElement)
 {
     vhal_error_t err = 0;
-    // ZDEBUG("Entered col seg function\n");
     uint16_t count = 0;
     ColorSensing_PrepareColor(colorElement);
     err = vhalPcntClear(colorSensing_unit);
@@ -121,7 +128,7 @@ uint32_t ColorSensing_GetColorSegment(uint32_t colorElement)
 
     // ColorSensing_StartCount();
     // ZDEBUG("Timer set to %d\n", colorSensing_timerPeriod);
-    vosThSleep(TIME_U(colorSensing_timerPeriod, MILLIS));
+    vosThSleep(TIME_U(colorSensing_options.timerPeriod, MILLIS));
     // vosTimerOneShot(colorSensing_timer, TIME_U(colorSensing_timerPeriod, MILLIS), ColorSensing_StopCount, NULL);
     // while (colorSensing_counting) 
     //     ;
@@ -133,17 +140,36 @@ uint32_t ColorSensing_GetColorSegment(uint32_t colorElement)
 
 void ColorSensing_GetColor()
 {
-    ColorSensing_FrequencyScaling(SCALE_100);
-    vhalPinWrite(colorSensing_pins.led, 1);
+    ColorSensing_FrequencyScaling(colorSensing_options.freqScale);
+    if (colorSensing_options.ledOn)
+        vhalPinWrite(colorSensing_pins.led, 1);
     for (int col = COLOR_RED; col < COLOR_MAX; col++)
-    // for (int col = COLOR_RED; col <= 1; col++)
     {
         colorSensing_color[col] = ColorSensing_GetColorSegment(col);
-        // ZDEBUG("Color segment %d: %d\n", col, colorSensing_color[col]);
     }
-    // return &colorSensing_color[0];
     vhalPinWrite(colorSensing_pins.led, 0);
     ColorSensing_FrequencyScaling(POWER_DOWN);
+}
+
+void ColorSensing_SetFrequencyScale(uint8_t scale)
+{
+    if ((scale < FREQ_LIMIT) && (scale > 0))
+    {
+        colorSensing_options.freqScale = scale;
+    }
+}
+
+void ColorSensing_SetMeasureTiming(uint32_t time_ms)
+{
+    if (time_ms)
+    {
+        colorSensing_options.timerPeriod = time_ms;
+    }
+}
+
+void ColorSensing_SetLedLight(uint8_t ledOn)
+{
+    colorSensing_options.ledOn = ledOn;
 }
 
 C_NATIVE(_init_color_sensor) {
@@ -196,24 +222,29 @@ C_NATIVE(_init_color_sensor) {
         .hctrl_mode = VHAL_PCNT_MODE_KEEP,
         .pos_mode = VHAL_PCNT_COUNT_INC,
         .neg_mode = VHAL_PCNT_COUNT_DIS,
-        .counter_h_lim = 100000,
+        .counter_h_lim = 10000,
         .counter_l_lim = -10000,
         .unit = VHAL_PCNT_UNIT_0,
         .channel = VHAL_PCNT_CHANNEL_0,
     };
 
-    err = vhalPcntInit(&config);
-    colorSensing_timerPeriod = PYC_ARG_INT(8);
-    ZDEBUG("Timer set to %d\n", colorSensing_timerPeriod);
+    colorSensing_options.freqScale = SCALE_100;
+    colorSensing_options.timerPeriod = 100;
+    colorSensing_options.ledOn = 1;
 
-    colorSensing_timer = vosTimerCreate();
+    err = vhalPcntInit(&config);
+    colorSensing_options.timerPeriod = PYC_ARG_INT(8);
+    ZDEBUG("Timer set to %d\n", colorSensing_options.timerPeriod);
+
+    // colorSensing_timer = vosTimerCreate();
     
     ZDEBUG("Init DONE\n");
 
     return VHAL_OK;    
 }
 
-C_NATIVE(_get_color) {
+C_NATIVE(_get_color) 
+{
     C_NATIVE_UNWARN();
     PYC_CHECK_NUM_ARGS(1);
     PYC_CHECK_ARG_INTEGER(0);
@@ -245,3 +276,39 @@ C_NATIVE(_get_color) {
 
     return VHAL_OK;    
 }
+
+C_NATIVE(_set_options) 
+{
+    C_NATIVE_UNWARN();
+    PYC_CHECK_NUM_ARGS(3);
+    PYC_CHECK_ARG_INTEGER(0);
+    PYC_CHECK_ARG_INTEGER(1);
+    PYC_CHECK_ARG_INTEGER(2);
+
+    uint8_t  freq_scale = PYC_ARG_INT(0);
+    uint32_t time_ms = PYC_ARG_INT(1);
+    uint8_t  led_on = PYC_ARG_INT(2);
+
+    // ZDEBUG("Test %d, %d\n", freq_scale, time_ms);
+
+    ColorSensing_SetFrequencyScale(freq_scale);
+    ColorSensing_SetMeasureTiming(time_ms);
+    ColorSensing_SetLedLight(led_on);
+
+    return VHAL_OK;
+}
+
+C_NATIVE(_get_options) 
+{
+    C_NATIVE_UNWARN();
+
+    PTuple *options = ptuple_new(3, NULL);;
+    PTUPLE_SET_ITEM(options, 0, PSMALLINT_NEW(colorSensing_options.freqScale));
+    PTUPLE_SET_ITEM(options, 1, PSMALLINT_NEW(colorSensing_options.timerPeriod));
+    PTUPLE_SET_ITEM(options, 2, PSMALLINT_NEW(colorSensing_options.ledOn));
+    
+    *res = MAKE_RESULT(options);
+
+    return VHAL_OK;
+}
+
